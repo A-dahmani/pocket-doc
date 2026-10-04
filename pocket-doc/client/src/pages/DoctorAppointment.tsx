@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -53,52 +53,19 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-
-// Types
-interface Doctor {
-  id: string;
-  name: string;
-  specialty: string;
-  rating: number;
-  reviewCount: number;
-  location: string;
-  phone: string;
-  email: string;
-  availability: string;
-  experience: number;
-  image: string;
-  languages: string[];
-  workingHours: {
-    days: string;
-    start: string;
-    end: string;
-  };
-  slots: TimeSlot[];
-}
-
-interface TimeSlot {
-  id: string;
-  date: string;
-  time: string;
-  available: boolean;
-  duration: number; // minutes
-}
-
-interface Appointment {
-  id: string;
-  doctorId: string;
-  doctorName: string;
-  specialty: string;
-  date: string;
-  time: string;
-  duration: number;
-  status: "confirmed" | "completed" | "cancelled";
-  patientName: string;
-  patientEmail: string;
-  patientPhone: string;
-  notes: string;
-  createdAt: string;
-}
+import {
+  getAllDoctors,
+  getDoctorsBySpecialty,
+  getDoctorById,
+  getAllAppointments,
+  getUserAppointments,
+  createAppointment,
+  cancelAppointment,
+  getAllSpecialties,
+  initializeDatabase,
+  type Doctor,
+  type Appointment,
+} from "@/lib/doctorDatabase";
 
 // Validation schemas
 const appointmentSchema = z.object({
@@ -113,135 +80,13 @@ const appointmentSchema = z.object({
 
 type AppointmentFormData = z.infer<typeof appointmentSchema>;
 
-// Mock data - Doctors Database
-const mockDoctors: Doctor[] = [
-  {
-    id: "doc1",
-    name: "Dr. Ahmed Benali",
-    specialty: "Médecin Généraliste",
-    rating: 4.8,
-    reviewCount: 156,
-    location: "Alger, Algérie",
-    phone: "+213 21 98 76 54",
-    email: "ahmed.benali@pocketdoc.com",
-    availability: "Disponible aujourd'hui",
-    experience: 15,
-    image: "AB",
-    languages: ["Français", "Arabe", "Anglais"],
-    workingHours: {
-      days: "Lun-Sam",
-      start: "09:00",
-      end: "18:00",
-    },
-    slots: [
-      { id: "s1", date: "2024-10-05", time: "09:00", available: true, duration: 30 },
-      { id: "s2", date: "2024-10-05", time: "09:30", available: true, duration: 30 },
-      { id: "s3", date: "2024-10-05", time: "10:00", available: false, duration: 30 },
-      { id: "s4", date: "2024-10-05", time: "14:00", available: true, duration: 30 },
-      { id: "s5", date: "2024-10-06", time: "09:00", available: true, duration: 30 },
-      { id: "s6", date: "2024-10-06", time: "10:30", available: true, duration: 30 },
-    ],
-  },
-  {
-    id: "doc2",
-    name: "Dr. Fatima Zahra Bouhadjar",
-    specialty: "Cardiologue",
-    rating: 4.9,
-    reviewCount: 203,
-    location: "Alger, Algérie",
-    phone: "+213 21 87 65 43",
-    email: "fatima.cardio@pocketdoc.com",
-    availability: "Disponible demain",
-    experience: 18,
-    image: "FZ",
-    languages: ["Français", "Arabe", "Anglais"],
-    workingHours: {
-      days: "Lun-Ven",
-      start: "10:00",
-      end: "17:00",
-    },
-    slots: [
-      { id: "s7", date: "2024-10-06", time: "10:00", available: true, duration: 45 },
-      { id: "s8", date: "2024-10-06", time: "10:45", available: true, duration: 45 },
-      { id: "s9", date: "2024-10-06", time: "14:00", available: true, duration: 45 },
-      { id: "s10", date: "2024-10-07", time: "10:00", available: false, duration: 45 },
-    ],
-  },
-  {
-    id: "doc3",
-    name: "Dr. Mohammed Saïd Bendjelloul",
-    specialty: "Dermatologue",
-    rating: 4.7,
-    reviewCount: 128,
-    location: "Oran, Algérie",
-    phone: "+213 41 76 54 32",
-    email: "derma.said@pocketdoc.com",
-    availability: "Disponible jeudi",
-    experience: 12,
-    image: "MS",
-    languages: ["Français", "Arabe"],
-    workingHours: {
-      days: "Lun-Sam",
-      start: "09:00",
-      end: "19:00",
-    },
-    slots: [
-      { id: "s11", date: "2024-10-07", time: "09:00", available: true, duration: 30 },
-      { id: "s12", date: "2024-10-07", time: "15:00", available: true, duration: 30 },
-      { id: "s13", date: "2024-10-08", time: "10:00", available: true, duration: 30 },
-    ],
-  },
-  {
-    id: "doc4",
-    name: "Dr. Leila Hamidi",
-    specialty: "Pédiatre",
-    rating: 4.6,
-    reviewCount: 94,
-    location: "Constantine, Algérie",
-    phone: "+213 31 65 43 21",
-    email: "pediatre.leila@pocketdoc.com",
-    availability: "Disponible aujourd'hui",
-    experience: 10,
-    image: "LH",
-    languages: ["Français", "Arabe", "Anglais"],
-    workingHours: {
-      days: "Lun-Ven",
-      start: "08:00",
-      end: "16:00",
-    },
-    slots: [
-      { id: "s14", date: "2024-10-05", time: "08:00", available: true, duration: 25 },
-      { id: "s15", date: "2024-10-05", time: "11:00", available: true, duration: 25 },
-      { id: "s16", date: "2024-10-05", time: "14:00", available: false, duration: 25 },
-    ],
-  },
-  {
-    id: "doc5",
-    name: "Dr. Karim El Aziz",
-    specialty: "Neurologue",
-    rating: 4.5,
-    reviewCount: 76,
-    location: "Alger, Algérie",
-    phone: "+213 21 54 32 10",
-    email: "neuro.karim@pocketdoc.com",
-    availability: "Disponible mercredi",
-    experience: 14,
-    image: "KE",
-    languages: ["Français", "Arabe"],
-    workingHours: {
-      days: "Mar-Sam",
-      start: "10:00",
-      end: "18:00",
-    },
-    slots: [
-      { id: "s17", date: "2024-10-07", time: "10:00", available: true, duration: 40 },
-      { id: "s18", date: "2024-10-07", time: "15:00", available: true, duration: 40 },
-    ],
-  },
-];
+export default function DoctorAppointment() {
+  // Initialize database on mount
+  useEffect(() => {
+    initializeDatabase();
+  }, []);
 
-export default function DoctorAppointmentSystem() {
-  const [doctors, setDoctors] = useState<Doctor[]>(mockDoctors);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -249,6 +94,7 @@ export default function DoctorAppointmentSystem() {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [userEmail, setUserEmail] = useState<string>("");
 
   const form = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -263,10 +109,24 @@ export default function DoctorAppointmentSystem() {
     },
   });
 
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const allDoctors = getAllDoctors();
+    setDoctors(allDoctors);
+    
+    const allAppointments = getAllAppointments();
+    setAppointments(allAppointments);
+
+    // Get user email from localStorage if available
+    const email = localStorage.getItem("userEmail") || "";
+    setUserEmail(email);
+  }, []);
+
   // Get unique specialties
   const specialties = useMemo(() => {
-    return ["all", ...new Set(doctors.map((d) => d.specialty))];
-  }, [doctors]);
+    const specs = getAllSpecialties();
+    return ["all", ...specs.map((s) => s.name)];
+  }, []);
 
   // Filter doctors by specialty and search
   const filteredDoctors = useMemo(() => {
@@ -289,6 +149,11 @@ export default function DoctorAppointmentSystem() {
     );
   }, [selectedDoctor, form.watch("date")]);
 
+  // User's appointments
+  const userAppointments = useMemo(() => {
+    return userEmail ? getUserAppointments(userEmail) : appointments;
+  }, [userEmail, appointments]);
+
   async function onSubmitAppointment(data: AppointmentFormData) {
     setIsLoading(true);
     try {
@@ -310,28 +175,19 @@ export default function DoctorAppointmentSystem() {
         createdAt: new Date().toISOString(),
       };
 
+      // Save to localStorage
+      createAppointment(newAppointment);
+      
+      // Update local state
       setAppointments([newAppointment, ...appointments]);
       
-      // Update doctor's slot availability
-      setDoctors(
-        doctors.map((d) =>
-          d.id === selectedDoctor.id
-            ? {
-                ...d,
-                slots: d.slots.map((s) =>
-                  s.time === data.time && s.date === data.date
-                    ? { ...s, available: false }
-                    : s
-                ),
-              }
-            : d
-        )
-      );
+      // Update user email if provided
+      if (data.patientEmail) {
+        localStorage.setItem("userEmail", data.patientEmail);
+        setUserEmail(data.patientEmail);
+      }
 
       toast.success(`Rendez-vous confirmé avec ${selectedDoctor.name}`);
-      
-      // Send confirmation email (mock)
-      console.log(`Email envoyé à ${data.patientEmail}`);
       
       form.reset();
       setIsBookingOpen(false);
@@ -350,14 +206,18 @@ export default function DoctorAppointmentSystem() {
     setIsBookingOpen(true);
   }
 
-  function cancelAppointment(appointmentId: string) {
-    setAppointments(
-      appointments.map((apt) =>
+  function handleCancelAppointment(appointmentId: string) {
+    const success = cancelAppointment(appointmentId);
+    if (success) {
+      const updated = appointments.map((apt) =>
         apt.id === appointmentId ? { ...apt, status: "cancelled" } : apt
-      )
-    );
-    toast.success("Rendez-vous annulé");
-    setSelectedAppointment(null);
+      );
+      setAppointments(updated);
+      toast.success("Rendez-vous annulé");
+      setSelectedAppointment(null);
+    } else {
+      toast.error("Erreur lors de l'annulation");
+    }
   }
 
   return (
@@ -545,7 +405,7 @@ export default function DoctorAppointmentSystem() {
 
           {/* My Appointments */}
           <TabsContent value="appointments" className="space-y-6">
-            {appointments.length === 0 ? (
+            {userAppointments.length === 0 ? (
               <Card>
                 <CardContent className="pt-6">
                   <div className="text-center py-12">
@@ -556,7 +416,7 @@ export default function DoctorAppointmentSystem() {
               </Card>
             ) : (
               <div className="space-y-4">
-                {appointments.map((appointment) => (
+                {userAppointments.map((appointment) => (
                   <Card
                     key={appointment.id}
                     className={`cursor-pointer hover:shadow-lg transition ${
@@ -655,7 +515,7 @@ export default function DoctorAppointmentSystem() {
                             variant="outline"
                             size="sm"
                             className="text-red-600 hover:text-red-700"
-                            onClick={() => cancelAppointment(appointment.id)}
+                            onClick={() => handleCancelAppointment(appointment.id)}
                           >
                             Annuler
                           </Button>
@@ -751,7 +611,7 @@ export default function DoctorAppointmentSystem() {
           {selectedDoctor && (
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit(onSubmitConsultation)}
+                onSubmit={form.handleSubmit(onSubmitAppointment)}
                 className="space-y-6"
               >
                 {/* Date and Time Selection */}
