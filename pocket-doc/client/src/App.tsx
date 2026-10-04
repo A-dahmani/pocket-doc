@@ -4,6 +4,7 @@ import { PocketDocProvider, usePocketDoc } from "@/contexts/PocketDocContext";
 import PocketDocApp from "@/pages/PocketDocApp";
 import Login from "@/pages/Login";
 import Admin from "@/pages/Admin";
+import DoctorAppointment from "@/pages/DoctorAppointment";
 import NotFound from "@/pages/NotFound";
 import "./index.css";
 
@@ -65,6 +66,11 @@ function AppContent() {
       <Route path="/admin" >
         <ProtectedRoute>
           <Admin />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/doctor-appointment" >
+        <ProtectedRoute>
+          <DoctorAppointment />
         </ProtectedRoute>
       </Route>
       <Route path="/" >
